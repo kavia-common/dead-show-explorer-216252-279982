@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     - COOKIE_DOMAIN: Domain scope for cookies (default: unset).
     - COOKIE_SAMESITE: SameSite policy: lax/strict/none (default: lax).
     - ENV: Runtime environment name (development/production/test).
+    - UVICORN_*: Common server runtime vars like host/port/workers.
+    - NODE_ENV: Node-like environment indicator if present in deployment.
+    - REQUEST_TIMEOUT_MS/RATE_LIMIT_*: Optional platform-provided extras that should not break startup.
     """
 
     # Core
@@ -64,11 +67,29 @@ class Settings(BaseSettings):
         description="SameSite policy for cookies: lax, strict, none",
     )
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+    # Common extras sometimes injected by platforms or other services. Optional and unused here,
+    # but defined to avoid Pydantic rejecting them when extra handling is strict upstream.
+    UVICORN_HOST: Optional[str] = Field(default=None, alias="uvicorn_host", description="Uvicorn host binding")
+    UVICORN_WORKERS: Optional[int] = Field(default=None, alias="uvicorn_workers", description="Number of Uvicorn workers")
+    NODE_ENV: Optional[str] = Field(default=None, alias="node_env", description="Node-like environment name")
+    REQUEST_TIMEOUT_MS: Optional[int] = Field(default=None, alias="request_timeout_ms", description="Request timeout in ms")
+    RATE_LIMIT_WINDOW_S: Optional[int] = Field(default=None, alias="rate_limit_window_s", description="Rate limit window in seconds")
+    RATE_LIMIT_MAX: Optional[int] = Field(default=None, alias="rate_limit_max", description="Max requests per window")
+    PORT: Optional[int] = Field(default=None, alias="port", description="Service port if injected by runtime")
+
+    # Configure settings source: load from .env, be case-insensitive, and ignore unknown extras.
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     # PUBLIC_INTERFACE
     def cors_origins_list(self) -> List[str]:
-        """Return parsed list of CORS origins. Supports wildcard '*' or CSV list."""
+        """
+        Return parsed list of CORS origins. Supports wildcard '*' or CSV list.
+        """
         raw = (self.CORS_ORIGINS or "").strip()
         if not raw:
             return []
@@ -78,12 +99,16 @@ class Settings(BaseSettings):
 
     # PUBLIC_INTERFACE
     def jwt_expiry(self) -> timedelta:
-        """Return JWT expiration as timedelta."""
+        """
+        Return JWT expiration as timedelta.
+        """
         return timedelta(minutes=int(self.JWT_EXPIRES_MINUTES))
 
     # PUBLIC_INTERFACE
     def cookie_samesite_normalized(self) -> str:
-        """Return normalized SameSite value ensuring one of lax/strict/none."""
+        """
+        Return normalized SameSite value ensuring one of lax/strict/none.
+        """
         value = (self.COOKIE_SAMESITE or "lax").lower()
         if value not in {"lax", "strict", "none"}:
             logger.warning("Invalid COOKIE_SAMESITE value '%s', falling back to 'lax'", value)
