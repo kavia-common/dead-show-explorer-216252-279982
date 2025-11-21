@@ -69,6 +69,7 @@ class Settings(BaseSettings):
 
     # Common extras sometimes injected by platforms or other services. Optional and unused here,
     # but defined to avoid Pydantic rejecting them when extra handling is strict upstream.
+    # We support both snake_case and common lowercase aliases injected by platforms.
     UVICORN_HOST: Optional[str] = Field(default=None, alias="uvicorn_host", description="Uvicorn host binding")
     UVICORN_WORKERS: Optional[int] = Field(default=None, alias="uvicorn_workers", description="Number of Uvicorn workers")
     NODE_ENV: Optional[str] = Field(default=None, alias="node_env", description="Node-like environment name")
@@ -78,6 +79,7 @@ class Settings(BaseSettings):
     PORT: Optional[int] = Field(default=None, alias="port", description="Service port if injected by runtime")
 
     # Configure settings source: load from .env, be case-insensitive, and ignore unknown extras.
+    # For Pydantic v2, SettingsConfigDict.extra="ignore" ensures unknown env vars do not cause failures.
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
